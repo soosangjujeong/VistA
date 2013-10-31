@@ -30,7 +30,7 @@ class ItemValue(object):
     return self.value[key]
 
 class GlobalNode(object):
-  def __init__(self, value):
+  def __init__(self, id, value):
     self.dict = {}
     self.value = ItemValue(value)
   def get(self, key, default=None):
