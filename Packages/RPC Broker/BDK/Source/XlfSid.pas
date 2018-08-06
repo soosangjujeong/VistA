@@ -31,7 +31,7 @@ function GetNTLogonSid(): string;
 implementation
 
 
-function ConvertSidToStringSid; external advapi32 name 'ConvertSidToStringSidA';
+function ConvertSidToStringSid; external advapi32 name 'ConvertSidToStringSidW';
 
 function GetNTLogonUser(): string;
 var
