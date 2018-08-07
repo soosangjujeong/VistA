@@ -31,7 +31,7 @@ object frmSignonMsg: TfrmSignonMsg
     Font.Style = [fsBold]
     ParentFont = False
     TabOrder = 1
-    object mmoMsg: TXWBRichEdit
+    object mmoMsg: TRichEdit
       Left = 4
       Top = 4
       Width = 750
@@ -42,7 +42,6 @@ object frmSignonMsg: TfrmSignonMsg
       Font.Height = -11
       Font.Name = 'Fixedsys'
       Font.Style = [fsBold]
-      URLDetect = True
       HideScrollBars = False
       Lines.Strings = (
         

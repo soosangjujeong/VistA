@@ -34,18 +34,17 @@ object frmSignon: TfrmSignon
     BevelInner = bvLowered
     BorderWidth = 4
     TabOrder = 0
-    object introText: TXWBRichEdit
+    object introText: TRichEdit
       Left = 6
       Top = 6
       Width = 749
       Height = 397
       Align = alClient
-      Font.Charset = ANSI_CHARSET
+      Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -15
       Font.Name = 'Courier New'
       Font.Style = [fsBold]
-      URLDetect = True
       Lines.Strings = (
         ''
         ''
@@ -121,6 +120,7 @@ object frmSignon: TfrmSignon
       ReadOnly = True
       ScrollBars = ssVertical
       TabOrder = 0
+      Zoom = 100
     end
   end
   object pnlLower: TPanel

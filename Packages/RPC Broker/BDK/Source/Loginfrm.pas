@@ -55,7 +55,7 @@ type
     lblVolume: TLabel;
     lblUCI: TLabel;
     lblPort: TLabel;
-    introText: TXWBRichEdit;
+    introText: TRichEdit;
     cbxChangeVerifyCode: TCheckBox;
     RpcbiBroker: TRPCBroker;
     procedure btnOkClick(Sender: TObject);
