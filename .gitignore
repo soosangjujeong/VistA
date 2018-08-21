@@ -27,3 +27,6 @@ __history
 *.project
 *.pydevproject
 
+# Build directories
+build
+build-testing
