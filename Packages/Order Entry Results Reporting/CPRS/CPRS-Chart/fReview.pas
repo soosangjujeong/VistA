@@ -9,7 +9,7 @@ uses
   Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, Dialogs,
   StdCtrls, checklst, uConst, ExtCtrls, uCore, mCoPayDesc, oPKIEncryption,
   ORCtrls, Menus, UBACore, ORClasses, ORNet, fBase508Form, fPrintLocation,
-  VA508AccessibilityManager, fCSRemaining, rODMeds;
+  VA508AccessibilityManager, fCSRemaining, rODMeds, XlfHash;
 
 type
   TfrmReview = class(TfrmBase508Form)

@@ -67,7 +67,7 @@ uses
   WinProcs, WinTypes, Windows,
   extctrls, {P6}
   {VA}
-  XWBut1, MFunStr, Hash, //P14 -- pack split
+  XWBut1, MFunStr, XlfHash, //P14 -- pack split
   ComObj, ActiveX, OleCtrls, VERGENCECONTEXTORLib_TLB;
 
 const

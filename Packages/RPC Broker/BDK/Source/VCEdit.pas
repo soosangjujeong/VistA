@@ -15,7 +15,7 @@ uses
   Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, Dialogs,
   StdCtrls, Buttons,
   {Broker units}
-  Trpcb, Hash;
+  Trpcb, XlfHash;
 
 type
   TVCEdit = class(TComponent)

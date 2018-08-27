@@ -7,7 +7,7 @@
 	Current Release: Version 1.1 Patch 47 (Jun. 17, 2008))
 *************************************************************** }
 
-unit Hash;
+unit XlfHash;
 
 
 interface

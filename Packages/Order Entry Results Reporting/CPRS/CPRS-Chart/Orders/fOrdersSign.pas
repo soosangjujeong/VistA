@@ -36,6 +36,7 @@ uses
   fPrintLocation,
   fCSRemaining,
   VA508AccessibilityManager,
+  XlfHash,
   rODMeds;
 
 type

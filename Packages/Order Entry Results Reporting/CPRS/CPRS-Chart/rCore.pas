@@ -2,7 +2,7 @@ unit rCore;
 
 interface
 
-uses SysUtils, Classes, Forms, ORNet, ORFn, ORClasses;
+uses SysUtils, Classes, Forms, ORNet, ORFn, ORClasses, XlfHash;
 
 { record types used to return data from the RPC's.  Generally, the delimited strings returned
   by the RPC are mapped into the records defined below. }

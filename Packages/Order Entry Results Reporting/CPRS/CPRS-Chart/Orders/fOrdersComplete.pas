@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, Dialogs,
-  fAutoSz, StdCtrls, ORFn, ORCtrls, VA508AccessibilityManager;
+  fAutoSz, StdCtrls, ORFn, ORCtrls, VA508AccessibilityManager, XlfHash;
 
 type
   TfrmCompleteOrders = class(TfrmAutoSz)

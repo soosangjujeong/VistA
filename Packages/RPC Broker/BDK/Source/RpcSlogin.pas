@@ -42,7 +42,7 @@ function CheckCmdLine(SLBroker: TRPCBroker): Boolean;
 
 implementation
 
-uses wsockc, loginfrm, rpcberr, seldiv, hash;
+uses wsockc, loginfrm, rpcberr, seldiv, xlfhash;
 
 //validate a/v codes
 function ValidAVCodes(SLBroker: TRPCBroker): boolean;

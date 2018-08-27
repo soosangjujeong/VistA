@@ -25,7 +25,7 @@ interface
 uses
   SysUtils, WinTypes, WinProcs, Messages, Classes, Graphics, Controls,
   Forms, Dialogs, StdCtrls, XWBut1, ExtCtrls, Buttons,
-  Hash, MFunStr, Trpcb, SgnonCnf, frmSignonMessage, ShellApi,
+  XlfHash, MFunStr, Trpcb, SgnonCnf, frmSignonMessage, ShellApi,
    Windows, XWBRich20, Vcl.ComCtrls{, ActiveX}; //, {OleServer;}
 
 { TODO : remove units from directory:  APi, xuesap_TLB, fRPCBTimer, fConfirmMapping,  fESSOConf }
