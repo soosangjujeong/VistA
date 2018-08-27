@@ -194,7 +194,7 @@ type
     procedure YearChanged(Sender: TObject);
     procedure BtnClicked(Sender: TObject);
     procedure YearUDChange(Sender: TObject; var AllowChange: Boolean;
-                           NewValue: Smallint; Direction: TUpDownDirection);
+                           NewValue: Integer; Direction: TUpDownDirection);
     procedure YearKeyPress(Sender: TObject; var Key: Char);
     procedure CheckDays;
     procedure Loaded; override;
@@ -1249,7 +1249,7 @@ begin
 end;
 
 procedure TORDateCombo.YearUDChange(Sender: TObject; var AllowChange: Boolean;
-                                    NewValue: Smallint; Direction: TUpDownDirection);
+                                    NewValue: Integer; Direction: TUpDownDirection);
 var
   y, m, d: word;
 begin
