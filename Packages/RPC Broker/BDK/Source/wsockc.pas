@@ -135,7 +135,7 @@ type
     Prefix: String;
 //    NetBlockingHookVar: Function(): Bool; export;
 //    function NetCall(hSocket: integer; imsg: AnsiString): PChar; // JLI O90705
-    function NetCall(hSocket: integer; imsg: String): PChar; // JLI O90705
+    function NetCall(hSocket: integer; imsg: TBytes): PChar; // JLI O90705
     function tCall(hSocket: integer; api, apVer: String; Parameters: TParams;
              var Sec, App: PChar; TimeOut: integer): PChar;
     function cRight( z: PChar;  n: longint): PChar;
@@ -144,7 +144,7 @@ type
     function BuildHdr ( wkid: string; winh: string; prch: string;
              wish: string): string;
     function BuildPar(hSocket: integer; api, RPCVer: string;
-             const Parameters: TParams): string;
+             const Parameters: TParams): TBytes;
     function StrPack ( n: string; p: integer): string;
     function VarPack(n: string): string;
     function NetStart(ForegroundM: boolean; Server: string; ListenerPort: integer;
@@ -163,9 +163,7 @@ type
     constructor Create;
 
     procedure NetError(Action: string; ErrType: integer);
-    function NetStart1(ForegroundM: boolean; Server: string; ListenerPort: integer;
-    var hSocket: integer): Integer; virtual;
-    function BuildPar1(hSocket: integer; api, RPCVer: string; const Parameters: 
+    function BuildPar1(hSocket: integer; api, RPCVer: string; const Parameters:
         TParams): String; virtual;
     property CountWidth: Integer read FCountWidth write FCountWidth;
     property IsBackwardsCompatible: Boolean read FIsBackwardsCompatible write 
@@ -180,9 +178,9 @@ type
   end;
 
 
-function LPack(S: string; NDigits: Integer): string;
+function LPack(Str: string; NDigits: Integer): TBytes;
 
-function SPack(S: string): string;
+function SPack(Str: string): TBytes;
 
 function NetBlockingHook: BOOL; export;
 // 080619 function to get socket port number
@@ -241,24 +239,27 @@ uses
   e.g., LPack('DataValue',4)
   returns   '0009DataValue'
 }
-function LPack(S: string; NDigits: Integer): string;
+function LPack(Str: String; NDigits: Integer): TBytes;
 var
   r: Integer;
   t: String;
+  t2: String;
   Width: Integer;
   Ex1: Exception;
 begin
-  r := Length(S);
+  r := TEncoding.UTF8.GetByteCount(Str);
   // check for enough space in NDigits characters
   t := IntToStr(r);
   Width := Length(t);
-  if NDigits < Width then begin
+  if NDigits < Width then
+  begin
     Ex1 := Exception.Create('In generation of message to server, call to LPack where Length of string of '+IntToStr(Width)+' chars exceeds number of chars for output length ('+IntToStr(NDigits)+')');
     Raise Ex1;
-  end;
+  end; //if
   t := '000000000' + IntToStr(r);               {eg 11-1-96}
-  Result := Copy(t, length(t)-(NDigits-1),length(t)) + S;
-end;
+  t2 := Copy(t, length(t)-(NDigits-1),length(t));
+  Result := TEncoding.UTF8.GetBytes(t2) + TEncoding.UTF8.GetBytes(Str);
+end; //function LPack
 
 {
   function SPack
@@ -267,20 +268,20 @@ end;
   e.g., SPack('DataValue')
   returns   #9 + 'DataValue'
 }
-function SPack(S: string): string;
+function SPack(Str: String): TBytes;
 var
   r: Integer;
   Ex1: Exception;
 begin
-  r := Length(S);
+  r := TEncoding.UTF8.GetByteCount(Str);
   // check for enough space in one byte
-  if r > 255 then begin
+  if r > 255 then
+  begin
     Ex1 := Exception.Create('In generation of message to server, call to SPack with Length of string of '+IntToStr(r)+' chars which exceeds max of 255 chars');
     Raise Ex1;
-  end;
-//  t := Byte(r);
-  Result := Char(r) + S;
-end;
+  end; //if
+  Result := [r] + TEncoding.UTF8.GetBytes(Str);
+end; //function SPack
 
 
 function TXWBWinsock.libNetCreate (lpWSData : TWSAData) : integer;
@@ -394,33 +395,13 @@ function TXWBWinsock.NetworkConnect(ForegroundM: boolean; Server: string; Listen
 var
   status: integer;
   hSocket: integer;
-  BrokerError: EBrokerError;
 begin
   Prefix := '[XWB]';
   IsNewStyle := true;
   xFlush := False;
   IsConnected := False;
   XHookTimeOut := TimeOut;
-  if not OldConnectionOnly then begin
-    try
-      status := NetStart(ForeGroundM, server, ListenerPort, hSocket);
-    except
-      on E: EBrokerError do begin
-        if IsBackwardsCompatible then begin // remove DSM specific error message, and just go with any error
-          status := NetStart1(ForeGroundM, server, ListenerPort, hSocket);
-        end else if ((Pos('connection lost',E.Message) > 0) or //  DSM
-                    ((Pos('recv',E.Message) > 0) and (Pos('WSAECONNRESET',E.Message) > 0))) then begin // Cache
-          BrokerError := EBrokerError.Create('Broker requires a UCX or single connection protocol and this port uses the callback protocol.'+'  The application is specified to be non-backwards compatible.  Installing patch XWB*1.1*35 and activating this port number for UCX connections will correct the problem.');
-          raise BrokerError;
-        end else begin
-          raise;
-        end;
-      end;
-    end;
-  end else begin // OldConnectionOnly
-    status := NetStart1(ForeGroundM, server, ListenerPort, hSocket);
-  end;
-
+  status := NetStart(ForeGroundM, server, ListenerPort, hSocket);
   if status = 0 then IsConnected := True;
   Result := hSocket;                  {return the newly established socket}
 end;
@@ -449,175 +430,73 @@ begin
 end;
 
 function TXWBWinsock.BuildPar(hSocket: integer; api, RPCVer: string;
-         const Parameters: TParams): string;
+         const Parameters: TParams): TBytes;
 var
-  i, ParamCount: integer;
-  param: string;
+  i,ParamCount: integer;
+  param: TBytes;
   tResult: string;
   subscript: string;
   IsSeen: Boolean;
-  BrokerError: EBrokerError;
-  S: string;
 begin
-  param := '5';
+  SetLength(param, 1);
+  param[0] := Ord('5');
   if Parameters = nil then ParamCount := 0
   else ParamCount := Parameters.Count;
   for i := 0 to ParamCount - 1 do
   begin
     if Parameters[i].PType <> undefined then
     begin
-       // Make sure that new parameter types are only used with non-callback server.
-      if IsBackwardsCompatible and ((Parameters[i].PType = global) or (Parameters[i].PType = empty) or (Parameters[i].PType = stream)) then
-      begin
-        if Parameters[i].PType = global then
-          S := 'global'
-        else if Parameters[i].PType = empty then
-          S := 'empty'
-        else
-          S := 'stream';
-        BrokerError := EBrokerError.Create('Use of ' + S + ' parameter type requires setting the TRPCBroker IsBackwardsCompatible property to FALSE');
-        raise BrokerError;
-      end;
       with Parameters[i] do
       begin
-//        if PType= null then
-//          param:='';
-
         if PType = literal then
-          param := param + '0'+LPack(Value,CountWidth)+'f';      // 030107 new message protocol
-
+          param := param + [Ord('0')] + LPack(Value,CountWidth) + [Ord('f')];      // 030107 new message protocol
         if PType = reference then
-          param := param + '1'+LPack(Value,CountWidth)+'f';     // 030107 new message protocol
-
+          param := param + [Ord('1')] + LPack(Value,CountWidth) + [Ord('f')];     // 030107 new message protocol
         if PType = empty then
-          param := param + '4f';
-
+          param := param + [Ord('4'), Ord('f')];
         if (PType = list) or (PType = global) then
         begin
           if PType = list then      // 030107 new message protocol
-            param := param + '2'
+            param := param + [Ord('2')]
           else
-            param := param + '3';
+            param := param + [Ord('3')];
           IsSeen := False;
           subscript := Mult.First;
           while subscript <> '' do
           begin
             if IsSeen then
-              param := param + 't';
+              param := param + [Ord('t')];
             if Mult[subscript] = '' then
               Mult[subscript] := #1;
             param := param + LPack(subscript,CountWidth)+LPack(Mult[subscript],CountWidth);
             IsSeen := True;
             subscript := Mult.Order(subscript,1);
-          end;  // while subscript <> ''
+          end; //while subscript <> ''
           if not IsSeen then         // 040922 added to take care of list/global parameters with no values
             param := param + LPack('',CountWidth);
-          param := param + 'f';
-        end;
+          param := param + [Ord('f')];
+        end; //if (PType = list) or (PType = global)
         if PType = stream then
         begin
-          param := param + '5' + LPack(Value,CountWidth) + 'f';
-        end;
-      end;  // with Parameters[i] do
-    end;  // if Parameters[i].PType <> undefined
-  end; // for i := 0
-  if param = '5' then
-    param := param + '4f';
+          param := param + [Ord('5')] + LPack(Value,CountWidth) + [Ord('f')];
+        end; //if PType = stream
+      end; //with Parameters[i] do
+    end; //if Parameters[i].PType <> undefined
+  end; //for i := 0
+  if param[0] = Ord('5') then
+    param := param + [Ord('4'), Ord('f')];
+  tresult := '[XWB]11' + IntToStr(CountWidth) + '02';
+  Result := TEncoding.UTF8.GetBytes(tresult) + SPack(RPCVer) + SPack(api) + param + [4];
+end; //function TXWBWinsock.BuildPar
 
-  tresult := Prefix + '11' + IntToStr(CountWidth) + '0' + '2' + SPack(RPCVer) + SPack(api) + param + #4;
 
-//  Application.ProcessMessages;  // removed 040716 jli not needed and may impact some programs
-
-  Result := tresult;
-end;
-{                   // previous message protocol
-  sin := TStringList.Create;
-  sin.clear;
-  x := '';
-  param := '';
-  arr := 0;
-  if Parameters = nil then ParamCount := 0
-  else ParamCount := Parameters.Count;
-  for i := 0 to ParamCount - 1 do
-    if Parameters[i].PType <> undefined then begin
-      with Parameters[i] do begin
-
-//        if PType= null then
-//          param:='';
-
-        if PType = literal then
-          param := param + strpack('0' + Value,3);
-        if PType = reference then
-          param := param + strpack('1' + Value,3);
-        if (PType = list) or (PType = global) then begin
-          Value := '.x';
-          param := param + strpack('2' + Value,3);
-          if Pos('.',Value) >0 then
-            x := Copy(Value,2,length(Value));
-//            if PType = wordproc then dec(last);
-            subscript := Mult.First;
-            while subscript <> '' do begin
-              if Mult[subscript] = '' then Mult[subscript] := #1;
-              sin.Add(StrPack(subscript,3) + StrPack(Mult[subscript],3));
-              subscript := Mult.Order(subscript,1);
-            end;  // while
-            sin.Add('000');
-            arr := 1;
-        end;  // if
-      end;  // with
-    end;  // if
-
-param := Copy(param,1,Length(param));
-tsize := 0;
-
-tResult := '';
-tout := '';
-
-hdr := BuildHdr('XWB','','','');
-strout := strpack(hdr + BuildApi(api,param,arr),5);
-num :=0;
-
-RPCVersion := '';
-RPCVersion := VarPack(RPCVer);
-
-if sin.Count-1 > 0 then num := sin.Count-1;
-
-if num > 0 then
-   begin
-        for i := 0 to num do
-          tsize := tsize + length(sin.strings[i]);
-        x := '00000' + IntToStr(tsize + length(strout)+ length(RPCVersion));
-   end;
-if num = 0 then
-   begin
-        x := '00000' + IntToStr(length(strout)+ length(RPCVersion));
-   end;
-
-psize := x;
-psize := Copy(psize,length(psize)-5,5);
-tResult := psize;
-tResult := ConCat(tResult, RPCVersion);
-tout := strout;
-tResult := ConCat(tResult, tout);
-
-if num > 0 then
-   begin
-        for i := 0 to num do
-            tResult := ConCat(tResult, sin.strings[i]);
-   end;
-
-sin.free;
-
-frmBrokerExample.Edit1.Text := tResult;
-
-Result := tResult;  // return result
-end;
-}
-
-function TXWBWinsock.StrPack(n: string; p: integer): String;
+{----------------------- TXWBWinsock.StrPack -------------------
+----------------------------------------------------------------}
+function TXWBWinsock.StrPack(n: String; p: Integer): String;
 var
-  s, l: integer;
-  t, x, zero, y: string;
+  s,l: Integer;
+  t,x,zero: shortstring;
+  y: String;
 begin
   s := Length(n);
   zero := StringOfChar('0', p);
@@ -663,147 +542,111 @@ begin
     if Now > (NetTimerStart + TimeOut) then WSACancelBlockingCall;
 end;
 
-function TXWBWinsock.NetCall(hSocket: integer; imsg: String): PChar; // JLI 090805
+function TXWBWinsock.NetCall(hSocket: integer; imsg: TBytes): PChar; // JLI 090805
 var
-//  I: Integer;
-//  BufSend, BufRecv, BufPtr: PChar;
-  BufSend, BufRecv, BufPtr: PAnsiChar;
-  sBuf: string;
+  BufSink: TBytes;                                            // to /dev/null
+  BufSend: TBytes;                                            // Send Buffer
+  BufRecv: TBytes;                                            // Receive Buffer
+  LBufSend: integer;                                          // Send Buffer Length
   OldTimeOut: integer;
-  BytesRead, BytesLeft, BytesTotal: longint;
+  BytesRead, BytesTotal: longint;
   TryNumber: Integer;
   BadXfer: Boolean;
   xString: String;
 begin
 
   { -- clear receive buffer prior to sending rpc }
-  if xFlush = True then begin
+  if xFlush = True then
+  begin
+    SetLength(BufSink, Buffer32k);
     OldTimeOut := HookTimeOut;
     HookTimeOut := 0;
     WSASetBlockingHook(@NetBlockingHook);
     NetCallPending := True;
-    BufRecv := PAnsiChar(StrAlloc(Buffer32k));
     NetTimerStart := Now;
-    BytesRead := recv(hSocket, BufRecv^, Buffer32k, 0);
+    BytesRead := recv(hSocket, BufSink[0], Buffer32k, 0);
     if BytesRead > 0 then
-      while BufRecv[BytesRead-1] <> #4 do begin
-        BytesRead := recv(hSocket, BufRecv^, Buffer32k, 0);
-      end;
-    StrDispose(BufRecv);
+      while BufSink[BytesRead-1] <> $4 do
+      begin
+        BytesRead := recv(hSocket, BufSink[0], Buffer32k, 0);
+      end; //while
     xFlush := False;
-    //Buf := nil;    //P14
     HookTimeOut := OldTimeOut;
-  end;
-  { -- provide variables for blocking hook }
+  end; //if
 
+  { -- Init some vars }
   TryNumber := 0;
   BadXfer := True;
 
-
   { -- send message length + message to server }
+  { -- Convert imsg into UTF-8 bytes and put into BufSend }
+  LBufSend := Length(imsg);
+  SetLength(BufSend, LBufSend);
+  BufSend := imsg;
 
-//  BufRecv := StrAlloc(Buffer32k);  // JLI 090805
-  BufRecv := PAnsiChar(StrAlloc(Buffer32k));
-  try    // BufRecv
-//    if Prefix = '[XWB]' then
-//      BufSend := StrNew(PChar({Prefix +} imsg))  //;     //moved in P14
-//      BufSend := StrNew(PAnsiChar({Prefix +} imsg))  //;     //moved in P14
-      BufSend := StrNew(PAnsiChar(AnsiString(imsg)));
-    try  // BufSend
-      Result := PChar('');
-      while BadXfer and (TryNumber < 4) do
+  while BadXfer and (TryNumber < 4) do
+  begin
+    NetCallPending := True;
+    NetTimerStart := Now;
+    TryNumber := TryNumber + 1;
+    BadXfer := False;
+
+    // Now send
+    SocketError := send(hSocket, BufSend[0], LBufSend,0); //p60  //smh
+    if SocketError = SOCKET_ERROR then
+      NetError('send', 0);
+
+   {Get Security and Application packets}
+    SecuritySegment := GetServerPacket(hSocket);
+    ApplicationSegment := GetServerPacket(hSocket);
+
+    { -- loop reading TCP buffer until server is finished sending reply }
+    BytesTotal := 0;
+    repeat
+      SetLength(BufRecv, Buffer32k + BytesTotal);
+      BytesRead := recv(hSocket, BufRecv[BytesTotal], Buffer32k, 0);
+      if BytesRead <= 0 then
       begin
-        NetCallPending := True;
-        NetTimerStart := Now;
-        TryNumber := TryNumber + 1;
-        BadXfer := False;
-//        SocketError := send(hSocket, BufSend^, StrLen(BufSend), 0);
-        SocketError := send(hSocket, BufSend^,StrLen(BufSend),0);
-        if SocketError = SOCKET_ERROR then
-          NetError('send', 0);
-        BufRecv[0] := #0;
-        try
-          BufPtr := BufRecv;
-          BytesLeft := Buffer32k;
-          BytesTotal := 0;
+        if BytesRead = SOCKET_ERROR then
+          NetError('recv', 0)
+        else
+          NetError('connection lost', 0);
+        break;
+      end; //if BytesRead <= 0
+      Inc(BytesTotal, BytesRead);
+    until BufRecv[BytesTotal-1] = $4; //repeat
+    SetLength(BufRecv, BytesTotal);
+    BufRecv[BytesTotal-1] := $0;
 
-          {Get Security and Application packets}
-          SecuritySegment := GetServerPacket(hSocket);
-          ApplicationSegment := GetServerPacket(hSocket);
-          sBuf := '';
-          { -- loop reading TCP buffer until server is finished sending reply }
+    Result := StrAlloc(BytesTotal);
+    StrCopy(Result, PChar(TEncoding.UTF8.GetString(BufRecv)));
 
-          repeat
-            BytesRead := recv(hSocket, BufPtr^, BytesLeft, 0);
-
-            if BytesRead > 0 then begin
-              if BufPtr[BytesRead-1] = #4 then begin
-//                sBuf := ConCat(sBuf, BufPtr);xe3
-                sBuf := sBuf + string(BufPtr);
-              end else begin
-                BufPtr[BytesRead] := #0;
-//                sBuf := ConCat(sBuf, BufPtr);
-                sBuf := sBuf + string(BufPtr);
-              end;
-              Inc(BytesTotal, BytesRead);
-            end;
-
-            if BytesRead <= 0 then begin
-              if BytesRead = SOCKET_ERROR then
-                NetError('recv', 0)
-              else
-                NetError('connection lost', 0);
-              break;
-            end;
-          until BufPtr[BytesRead-1] = #4;
-          sBuf := Copy(sBuf, 1, BytesTotal - 1);
-  {
-          StrDispose(BufRecv);
-          BufRecv := StrAlloc(BytesTotal+1);   // cause of many memory leaks
-          StrCopy(BufRecv, PChar(sBuf));
-          Result := BufRecv;
-  }
-          Result := StrAlloc(BytesTotal+1);
-          StrCopy(Result, PChar(sBuf));
-          if ApplicationSegment = 'U411' then
-            BadXfer := True;
-          NetCallPending := False;
-        finally
-          sBuf := '';
-        end;
-      end;
-    finally     // BufSend
-      StrDispose(BufSend);
-    end;
-
-    if BadXfer then
-    begin
-//      StrDispose(BufRecv);
-      NetError(StrPas('Repeated Incomplete Reads on the server'), XWB_BadReads);
-      Result := StrNew('');
-    end;
-
-    { -- if there was on error on the server, display the error code }
-
-    if AnsiChar(Result[0]) = #24 then
-    begin
-//      xString := StrPas(@Result[1]);     // JLI 090804
-      xString := String(Result);           // JLI 090804
-      xString := Copy(xString,2,Length(xString)); // JLI 090804
-//      StrDispose(BufRecv);
-      NetError(xString, XWB_M_REJECT);
-  //    NetCall := #0;
-      Result := StrNew('');
-    end;
-  finally
-    StrDispose(BufRecv);
+    if ApplicationSegment = 'U411' then
+      BadXfer := True;
+    NetCallPending := False;
   end;
-end;
+
+  if BadXfer then
+  begin
+    NetError('Repeated Incomplete Reads on the server', XWB_BadReads);  //p60
+    Result := StrNew('');
+  end; //if BadXfer
+
+  { -- if there was on error on the server, display the error code }
+  if Result[0] = #24 then
+  begin
+    xString := String(Result);           // JLI 090804
+    xString := Copy(xString,2,Length(xString)); // JLI 090804
+    NetError(xString, XWB_M_REJECT);
+    Result := StrNew('');
+  end; //if AnsiChar(Result[0]) = #24
+end; //function TXWBWinsock.NetCall
+
 
 function TXWBWinsock.tCall(hSocket: integer; api, apVer: String; Parameters: TParams;
          var Sec , App: PChar; TimeOut: integer ): PChar;
 var
-  tmp: string;
+  tmp: TBytes;
   ChangeCursor: Boolean;
 begin
   HookTimeOut := TimeOut;
@@ -814,10 +657,7 @@ begin
   if ChangeCursor then
     Screen.Cursor := crHourGlass;  //P6
 
-  if Prefix = '[XWB]' then
-    tmp := BuildPar(hSocket, api, apVer, Parameters)
-  else
-    tmp := BuildPar1(hSocket, api, apVer, Parameters);
+  tmp := BuildPar(hSocket, api, apVer, Parameters);
 
   //     xFlush := True;     // Have it clear input buffers prior to call
   Result := NetCall(hSocket, tmp);
@@ -834,7 +674,8 @@ var
   WinSockData: TWSADATA;
   LocalHost, DHCPHost: TSockAddr;
   LocalName, workstation, pDHCPName: string;
-  y, tmp, upArrow, rAccept, rLost: string;
+  tmp, upArrow, rAccept, rLost: string;
+  y: TBytes;
   tmpPchar: PChar;
 //  pLocalname: array [0..255] of char;  // JLI 090804
   pLocalname: array [0..255] of AnsiChar;  // JLI 090804
@@ -966,8 +807,9 @@ begin
 }
     { new protocol 030107 }
 
-//    y := '[XWB]10' +IntToStr(CountWidth)+ '0' + '4'+#$A+'TCPConnect50'+ LPack(LocalName,CountWidth)+'f0'+LPack(IntToStr(LocalPort),CountWidth)+'f0'+LPack(workstation,CountWidth)+'f'+#4;
-  y := Prefix + '10' +IntToStr(CountWidth)+ '0' + '4'+#$A +'TCPConnect50'+ LPack(LocalName,CountWidth)+'f0'+LPack(IntToStr(0),CountWidth)+'f0'+LPack(workstation,CountWidth)+'f'+#4;
+  y := TEncoding.UTF8.GetBytes('[XWB]' + '10' + IntToStr(CountWidth) + '0' + '4'+#$A + 'TCPConnect50');
+  y := y + LPack(LocalName,CountWidth) + [ Ord('f'), Ord('0') ] + LPack(IntToStr(0),CountWidth);
+  y := y + [ Ord('f'), Ord('0') ] + LPack(String(pLocalName),CountWidth) + [ Ord('f'), 4 ];
 
 {  // need to remove selecting port etc from client, since it will now be handled on the server P36
 
@@ -1055,216 +897,6 @@ begin
         ifrmWinSock.txtStatus := 'socket obtained' *** }
 end;
 
-function TXWBWinsock.NetStart1(ForegroundM: boolean; Server: string;
-    ListenerPort: integer; var hSocket: integer): Integer;
-var
-  WinSockData: TWSADATA;
-  LocalHost, DHCPHost: TSockAddr;
-  LocalName, t, workstation, pDHCPName: string;
-  x, y, tmp,RPCVersion, upArrow, rAccept, rLost: string;
-  tmpPchar: PChar;
-//  pLocalname: array [0..255] of char;  // JLI 090804
-  pLocalname: array [0..255] of AnsiChar;  // JLI 090804
-  LocalPort, AddrLen, hSocketListen,r: integer;
-  HostBuf,DHCPBuf: PHostEnt;
-  lin: TLinger;
-//  s_lin: array [0..3] of char absolute lin;  // JLI 090804
-  s_lin: array [0..3] of AnsiChar absolute lin;  // JLI 090804
-  ChangeCursor: Boolean;
-begin
-  Prefix := '{XWB}';
-  IsNewStyle := false;
-{ ForegroundM is a boolean value, TRUE means the M handling process is
-  running interactively a pointer rather than passing address length
-  by value) }
-
-    { -- initialize Windows Sockets API for this task }
-  ChangeCursor := (Screen.Cursor = crDefault) and (IsVisual);
-  if ChangeCursor then
-    Screen.Cursor := crHourGlass;
-  upArrow := string('^');
-  rAccept := string('accept');
-  rLost := string('(connection lost)');
-
-  SocketError := WSAStartup(WINSOCK1_1, WinSockData);
-  if SocketError >0 then
-    NetError( 'WSAStartup',0);
-
-  { -- set up a hook for blocking calls so there is no automatic DoEvents
-   in the background }
-  NetCallPending := False;
-  if not ForeGroundM then 
-    if WSASetBlockingHook(@NetBlockingHook) = nil then 
-      NetError('WSASetBlockingHook',0);
-
-  { -- establish HostEnt and Address structure for local machine}
-  SocketError := gethostname(pLocalName, 255); { -- name of local system}
-  if SocketError >0 then
-    NetError ('gethostname (local)',0);
-  HostBuf := gethostbyname(pLocalName); { -- info for local name}
-  if HostBuf = nil then
-    NetError( 'gethostbyname',0);
-  LocalHost.sin_addr.S_addr := longint(plongint(HostBuf^.h_addr_list^)^);
-  LocalName := string(inet_ntoa(LocalHost.sin_addr));
-  workstation := string(HostBuf.h_name);
-
-  { -- establish HostEnt and Address structure for remote machine }
-//    if inet_addr(PChar(Server)) <> longint(INADDR_NONE) then   // JLI 090804
-  if inet_addr(PAnsiChar(AnsiString(Server))) <> longint(INADDR_NONE) then begin // JLI 090804
-//      DHCPHost.sin_addr.S_addr := inet_addr(PChar(Server));   // JLI 090804
-    DHCPHost.sin_addr.S_addr := inet_addr(PAnsiChar(AnsiString(Server)));  // JLI 090804
-    DHCPBuf := gethostbyaddr(@DHCPHost.sin_addr.S_addr,sizeof(DHCPHost),PF_INET);
-  end else begin
-//        DHCPBuf := gethostbyname(PChar(Server)); { --  info for DHCP system}  // JLI 090804
-    DHCPBuf := gethostbyname(PAnsiChar(AnsiString(Server))); { --  info for DHCP system}  // JLI 090804
-  end;
-
-  if DHCPBuf = nil then begin
-      { modification to take care of problems with 10-dot addresses that weren't registered - solution found by Shawn Hardenbrook }
-//            NetError ('Error Identifying Remote Host ' + Server,0);
-//            NetStart := 10001;
-//            exit;
-//      DHCPHost.sin_addr.S_addr := inet_addr(PChar(Server));  // JLI 090804
-    DHCPHost.sin_addr.S_addr := inet_addr(PAnsiChar(AnsiString(Server)));  // JLI 090804
-    pDHCPName := 'UNKNOWN';
-  end else begin
-    DHCPHost.sin_addr.S_addr := longint(plongint(DHCPBuf^.h_addr_list^)^);
-    pDHCPName := string(inet_ntoa(DHCPHost.sin_addr));
-  end;
-  DHCPHost.sin_family := PF_INET;                 { -- internet address type}
-  DHCPHost.sin_port := htons(ListenerPort);        { -- port to connect to}
-
-  { -- make connection to DHCP }
-  hSocket := socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if hSocket = INVALID_SOCKET then
-    NetError( 'socket',0);
-
-  SocketError := connect(hSocket, DHCPHost, SizeOf(DHCPHost));
-  if SocketError = SOCKET_ERROR then
-    NetError( 'connect',0);
-
-  {establish local IP now that connection is done}
-  AddrLen := SizeOf(LocalHost);
-  SocketError := getsockname(hSocket, LocalHost, AddrLen);
-  if SocketError = SOCKET_ERROR then
-    NetError ('getsockname',0);
-  LocalName := string(inet_ntoa(LocalHost.sin_addr));
-
-//    { -- set up listening socket for DHCP return connect }
-  hSocketListen := socket(PF_INET, SOCK_STREAM, IPPROTO_TCP); // --  new socket
-  if hSocketListen = INVALID_SOCKET then
-    NetError ('socket (listening)',0);
-
-  LocalHost.sin_family := PF_INET;            // -- internet address type
-  LocalHost.sin_port := 0;                    // -- local listening port
-  SocketError := bind(hSocketListen, LocalHost, SizeOf(LocalHost)); // -- bind socket to address
-  if SocketError = SOCKET_ERROR Then
-    NetError( 'bind',0);
-
-  AddrLen := sizeof(LocalHost);
-  SocketError := getsockname(hSocketListen, LocalHost,
-              AddrLen);  // -- get listening port #
-  if SocketError = SOCKET_ERROR then
-    NetError( 'getsockname',0);
-  LocalPort := ntohs(LocalHost.sin_port);    // -- put in proper byte order
-
-  SocketError := listen(hSocketListen, 1);   // -- put socket in listen mode
-  if SocketError = SOCKET_ERROR then
-    NetError( 'listen',0);
-
-  { -- send IP address + port + workstation name and wait for OK : eg 1-30-97}
-
-  RPCVersion := VarPack(BrokerVer);              //   eg 11-1-96
-  x := string('TCPconnect^');
-  x := ConCat(x, LocalName, upArrow);            //   local ip address
-  t := IntToStr(LocalPort);                         // callback port
-  x := ConCat(x, t, upArrow, workstation, upArrow); // workstation name
-  r := length(x) + length(RPCVersion) + 5;
-  t := string('00000') + IntToStr(r);               // eg 11-1-96
-  y := Copy(t, length(t)-4,length(t));
-  y := ConCat(y, RPCVersion, StrPack(x,5));         // rpc version
-  y := Prefix + y;
-  { new protocol 030107 }
-
-//    y := '[XWB]10' +IntToStr(CountWidth)+ '0' + '4'+#$A+'TCPConnect50'+ LPack(LocalName,CountWidth)+'f0'+LPack(IntToStr(LocalPort),CountWidth)+'f0'+LPack(workstation,CountWidth)+'f'+#4;
-//    y := '[XWB]10' +IntToStr(CountWidth)+ '0' + '4'+#$A+'TCPConnect50'+ LPack(LocalName,CountWidth)+'f0'+LPack(IntToStr(0),CountWidth)+'f0'+LPack(workstation,CountWidth)+'f'+#4;
-
-// need to remove selecting port etc from client, since it will now be handled on the server P36
-
-  if ForeGroundM then begin
-    if ChangeCursor then
-      Screen.Cursor := crDefault;
-    t := 'Start M job D EN^XWBTCP' + #13 + #10 + 'Addr = ' + 
-         LocalName + #13 + #10 + 'Port = ' + IntToStr(LocalPort);
-
-    frmDebugInfo := TfrmDebugInfo.Create(Application.MainForm);
-    try
-      frmDebugInfo.lblDebugInfo.Caption := t;
-      ShowApplicationAndFocusOK(Application);
-      frmDebugInfo.ShowModal;
-    finally
-      frmDebugInfo.Free
-    end;
-//         ShowMessage(t);  //TODO
-  end;
-// remove debug mode from client
-
-  tmpPChar := NetCall(hSocket, PChar(y));                {eg 11-1-96}
-  tmp := tmpPchar;
-  StrDispose(tmpPchar);
-  if CompareStr(tmp, rlost) = 0 then begin
-    lin.l_onoff := 1;
-    lin.l_linger := 0;
-
-    SocketError := setsockopt(hSocket, SOL_SOCKET, SO_LINGER, s_lin, sizeof(lin));
-    if SocketError = SOCKET_ERROR then
-      NetError( 'setsockopt (connect)',0);
-
-    closesocket(hSocket);
-    WSACleanup;
-    Result := 10002;
-    Exit;
-  end;
-  r := CompareStr(tmp, rAccept);
-  if r <> 0 then
-    NetError ('NetCall',XWB_M_REJECT);
-// JLI 021217 remove disconnect and reconnect code -- use UCX connection directly.
-  lin.l_onoff := 1;
-  lin.l_linger := 0;
-
-  SocketError := setsockopt(hSocket, SOL_SOCKET, SO_LINGER, s_lin, sizeof(lin));
-  if SocketError = SOCKET_ERROR then
-    NetError( 'setsockopt (connect)',0);
-  SocketError := closesocket(hSocket);          // -- done with this socket
-  if SocketError > 0 then
-    NetError( 'closesocket',0);
-
-  // -- wait for connect from DHCP and accept it - (uses blocking call)
-  AddrLen := SizeOf(DHCPHost);
-  hSocket := accept(hSocketListen, @DHCPHost, @AddrLen); // -- returns new socket
-  if hSocket = INVALID_SOCKET then
-    NetError( 'accept',0);
-
-  lin.l_onoff := 1;
-  lin.l_linger := 0;
-
-  SocketError := setsockopt(hSocketListen, SOL_SOCKET, SO_LINGER, s_lin, sizeof(lin));
-  if SocketError = SOCKET_ERROR then
-    NetError( 'setsockopt (connect)',0);
-
-  SocketError := closesocket(hSocketListen);   // -- done with listen skt
-
-  if SocketError > 0 then
-    NetError ('closesocket (listening)',0);
-           // JLI 12/17/02  end of section commented out
-
-  if ChangeCursor then
-    Screen.Cursor := crDefault;
-  NetStart1 := 0;
-{ -- connection established, socket handle now in:  hSocket
-      ifrmWinSock.txtStatus := 'socket obtained' *** }
-end;
-
 
 procedure TXWBWinsock.NetStop(hSocket: integer);
 var
@@ -1295,7 +927,7 @@ begin
   else
     S := Prefix + x;
   if hSocket <> INVALID_SOCKET then begin
-    tmpPChar := NetCall(hSocket,S);
+    tmpPChar := NetCall(hSocket,TEncoding.UTF8.GetBytes(S));
     //   	  tmpPChar := NetCall(hSocket, x);
     tmp := tmpPChar;
     StrDispose(tmpPChar);
@@ -1341,29 +973,28 @@ end;
 
 function TXWBWinsock.GetServerPacket(hSocket: integer): string;
 var
-  s, sb: PAnsiChar;
+  s: Array[0..1] of Byte; //smh
+  sb: TBytes;
   buflen: integer;
 begin
-  s := AnsiStrAlloc(1);
-  s[0] := #0;
-  buflen := recv(hSocket, s^, 1, 0); {get length of segment}
-  if buflen = SOCKET_ERROR then begin  // 040720 code added to check for the timing problem if initial attempt to read during connection fails
+  s[0] := $0;
+  buflen := recv(hSocket, s, 1, 0); //get length of segment
+  if buflen = SOCKET_ERROR then   // check for timing problem if initial attempt to read during connection fails
+  begin
     sleep(100);
-    buflen := recv(hSocket, s^, 1, 0);
-  end;
+    buflen := recv(hSocket, s, 1, 0);
+  end; //if
   if buflen = SOCKET_ERROR then
     NetError( 'recv',0);
   buflen := ord(s[0]);
-  sb := AnsiStrAlloc(buflen+1);
-  sb[0] := #0;
-  buflen := recv(hSocket, sb^, buflen, 0); {get security segment}
+  SetLength(sb, 1 + buflen);
+  buflen := recv(hSocket, sb[0], buflen, 0); {get security segment}
   if buflen = SOCKET_ERROR then
     NetError( 'recv',0);
-  sb[buflen] := #0;
-  Result := string(sb);
-  StrDispose(sb);
-  StrDispose(s);
-end;
+  sb[buflen] := $0;
+  Result := TEncoding.UTF8.GetString(sb); //p60 //smh
+end; //function TXWBWinsock.GetServerPacket
+
 
 constructor TXWBWinsock.Create;
 begin
