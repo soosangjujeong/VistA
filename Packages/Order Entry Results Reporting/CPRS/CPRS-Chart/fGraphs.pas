@@ -7044,8 +7044,8 @@ begin
         if ClickedValue > -1 then break;
         ClickedMark := Marks.Clicked(FX, FY);
         if ClickedMark > -1 then break;
-        ClickedLegend := Legend.Clicked(FX, FY);
-        if ClickedLegend > -1 then break;
+        { ClickedLegend := Legend.Clicked(FX, FY);
+        if ClickedLegend > -1 then break; }
       end;
     end;
     if (ClickedValue > -1) or (ClickedMark > -1) then
