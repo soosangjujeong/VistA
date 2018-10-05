@@ -394,7 +394,7 @@ pnlBottom.gbProvDiag.lvDxGrid.Columns.(1).Caption=Primary
 pnlBottom.gbProvDiag.lvDxGrid.Columns.(2).Caption=Diagnosis for Selected Orders
 
 [TfrmBAOptionsDiagnoses]
-Caption=Personal Diagnoses List
+Caption=개인 진단 목록
 Panel1.Caption=Panel1
 Panel1.Panel2.Caption=Panel1
 Panel1.Panel2.pnlBottom.btnOther.Caption=Other &Diagnoses
