@@ -303,9 +303,6 @@ foreach(v
 endforeach(v)
 message("Dashboard script configuration:\n${vars}\n")
 
-# Avoid non-ascii characters in tool output.
-set(ENV{LC_ALL} C)
-
 # Helper macro to write the initial CMakeCache.txt
 macro(write_CMakeCache)
   set(CMakeCache_build_type "")
